@@ -4,10 +4,24 @@ use glium::{
 
 #[derive(Copy, Clone)]
 struct Vertex {
-    position: [f32; 2],
+    position: [u32; 2],
 }
 
 implement_vertex!(Vertex, position);
+
+#[derive(Copy, Clone)]
+pub struct Point {
+    pub x: u32,
+    pub y: u32,
+}
+
+#[derive(Copy, Clone)]
+pub struct Region {
+    pub p1: Point,
+    pub p2: Point,
+}
+
+type TakenRegion = Region;
 
 pub struct DrawingContext {
     pub display: Display,
@@ -35,27 +49,130 @@ fn parse_color(color_code: &str) -> [f32; 3] {
 }
 
 pub trait Container {
-    fn draw(&self, context: &DrawingContext, frame: &mut Frame) {}
+    fn put(&mut self, item: Box<dyn Drawable>);
+}
+
+pub trait Drawable {
+    fn set_parent(&mut self, item: Box<dyn Drawable>);
+    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion;
+}
+
+#[derive(Default)]
+pub struct BaseOptions {
+    pub width: u32,
+    pub height: u32,
+    pub z_index: u8,
+    pub color: Option<String>,
+}
+
+pub struct Screen {
+    children: Vec<Box<dyn Drawable>>,
+    parent: Option<Box<dyn Drawable>>,
+}
+
+impl Screen {
+    pub fn new() -> Self {
+        Self {
+            children: vec![],
+            parent: None,
+        }
+    }
+}
+
+impl Container for Screen {
+    fn put(&mut self, item: Box<dyn Drawable>) {
+        self.children.push(item)
+    }
+}
+
+impl Drawable for Screen {
+    fn set_parent(&mut self, item: Box<dyn Drawable>) {
+        panic!("Cannot set a parent for the Screen!");
+    }
+
+    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion {
+        let mut available_region = drawing_region;
+
+        for child in &self.children {
+            let taken_region = child.draw(available_region, context, frame);
+
+            // Screen is only top-down by default
+            available_region = Region {
+                p1: Point {
+                    x: available_region.p1.x,
+                    y: available_region.p1.y + taken_region.p2.y,
+                },
+                p2: Point {
+                    x: available_region.p2.x,
+                    y: available_region.p2.y,
+                }
+            }
+            
+        }
+
+        drawing_region
+   }
 }
 
 pub struct Rect {
-    pub width: f32,
-    pub height: f32,
-    pub color: Option<String>,
-    pub z_index: u8,
+    base_options: BaseOptions,
+
+    children: Vec<Box<dyn Drawable>>,
+    parent: Option<Box<dyn Drawable>>,
 }
 
-impl Container for Rect {
-    fn draw(&self, context: &DrawingContext, frame: &mut Frame) {
-        let top_left = Vertex { position: [0., 0.] };
+impl Rect {
+    pub fn new(base_options: BaseOptions, parent: Option<Box<dyn Drawable>>) -> Self {
+        Self {
+            base_options,
+            children: vec![],
+            parent,
+        }
+    }
+}
+
+impl Drawable for Rect {
+    fn set_parent(&mut self, item: Box<dyn Drawable>) {
+        self.parent = Some(item);
+    }
+
+    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion {
+        let opts = &self.base_options;
+
+        let top_left = Vertex { 
+            position: [
+                drawing_region.p1.x,
+                drawing_region.p1.y,
+            ] ,
+        };
         let top_right = Vertex {
-            position: [0. + self.width, 0.],
+            position: [
+                drawing_region.p1.x + opts.width,
+                drawing_region.p1.y,
+            ],
         };
         let bottom_left = Vertex {
-            position: [0., 0. + self.height],
+            position: [
+                drawing_region.p1.x,
+                drawing_region.p1.y + opts.height,
+            ],
         };
         let bottom_right = Vertex {
-            position: [0. + self.width, 0. + self.height],
+            position: [
+                drawing_region.p1.x + opts.width,
+                drawing_region.p1.y + opts.height,
+            ],
+        };
+
+        let taken_space = Region {
+            p1: Point{
+                x: top_left.position[0],
+                y: top_left.position[1],
+            },
+            p2: Point{
+                x: bottom_right.position[0],
+                y: bottom_right.position[1],
+            },
         };
 
         let shape = vec![top_right, bottom_right, bottom_left, top_left];
@@ -68,7 +185,7 @@ impl Container for Rect {
         )
         .unwrap();
 
-        let color = if let Some(color) = &self.color {
+        let color = if let Some(color) = &opts.color {
             parse_color(color.as_str())
         } else {
             parse_color("black")
@@ -87,7 +204,6 @@ impl Container for Rect {
         proj[2][2] = 1.0;
         proj[2][3] = 1.0;
 
-        println!("{}", context.size.width);
         frame
             .draw(
                 &vertex_buffer,
@@ -95,12 +211,14 @@ impl Container for Rect {
                 &context.program,
                 &uniform! {
                     proj: proj,
-                    z_index: self.z_index as i32,
+                    z_index: opts.z_index as i32,
                     usr_color: color,
                 },
                 &Default::default(),
             )
             .unwrap();
+
+        taken_space
     }
 }
 

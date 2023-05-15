@@ -1,6 +1,6 @@
 use glium::{glutin::dpi::PhysicalSize, implement_vertex, uniform};
 
-use aegis::widgets::{Container, DrawingContext};
+use aegis::widgets::{Drawable, Container, DrawingContext, BaseOptions};
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -44,12 +44,23 @@ fn main() {
         glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None)
             .unwrap();
 
-    let rect = aegis::widgets::Rect {
-        width: 250.,
-        height: 250.,
-        z_index: 0,
-        color: Some(String::from("#5400c2")),
-    };
+    let mut screen = aegis::widgets::Screen::new();
+
+    let rect = aegis::widgets::Rect::new(BaseOptions {
+        width: 200,
+        height: 500,
+        ..Default::default()
+    }, None);
+
+    let rect2 = aegis::widgets::Rect::new(BaseOptions {
+        width: 300,
+        height: 300,
+        color: Some(String::from("red")),
+        ..Default::default()
+    }, None);
+
+    screen.put(Box::new(rect));
+    screen.put(Box::new(rect2));
 
     let mut drawing_context = DrawingContext {
         display,
@@ -81,10 +92,20 @@ fn main() {
         }
 
         let mut target = drawing_context.display.draw();
-        target.clear_color(0.0, 0.0, 1.0, 1.0);
+        target.clear_color(1.0, 1.0, 1.0, 1.0);
 
-        rect.draw(&drawing_context, &mut target);
+        let drawing_region = aegis::widgets::Region {
+            p1: aegis::widgets::Point {
+                x: 0,
+                y: 0,
+            },
+            p2: aegis::widgets::Point {
+                x: drawing_context.size.width,
+                y: drawing_context.size.height,
+            },
+        };
 
+        screen.draw(drawing_region, &drawing_context, &mut target);
         target.finish().unwrap();
     });
 }
