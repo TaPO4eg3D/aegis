@@ -48,16 +48,25 @@ fn main() {
 
     let rect = aegis::widgets::Rect::new(BaseOptions {
         width: 200,
-        height: 500,
+        height: 200,
         ..Default::default()
     }, None);
 
-    let rect2 = aegis::widgets::Rect::new(BaseOptions {
+    let mut rect2 = aegis::widgets::Rect::new(BaseOptions {
         width: 300,
         height: 300,
         color: Some(String::from("red")),
         ..Default::default()
     }, None);
+
+    let rect3 = aegis::widgets::Rect::new(BaseOptions {
+        width: 100,
+        height: 100,
+        color: Some(String::from("#32a852")),
+        ..Default::default()
+    }, None);
+
+    rect2.put(Box::new(rect3));
 
     screen.put(Box::new(rect));
     screen.put(Box::new(rect2));

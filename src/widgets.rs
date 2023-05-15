@@ -50,50 +50,16 @@ fn parse_color(color_code: &str) -> [f32; 3] {
 
 pub trait Container {
     fn put(&mut self, item: Box<dyn Drawable>);
-}
 
-pub trait Drawable {
-    fn set_parent(&mut self, item: Box<dyn Drawable>);
-    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion;
-}
-
-#[derive(Default)]
-pub struct BaseOptions {
-    pub width: u32,
-    pub height: u32,
-    pub z_index: u8,
-    pub color: Option<String>,
-}
-
-pub struct Screen {
-    children: Vec<Box<dyn Drawable>>,
-    parent: Option<Box<dyn Drawable>>,
-}
-
-impl Screen {
-    pub fn new() -> Self {
-        Self {
-            children: vec![],
-            parent: None,
-        }
-    }
-}
-
-impl Container for Screen {
-    fn put(&mut self, item: Box<dyn Drawable>) {
-        self.children.push(item)
-    }
-}
-
-impl Drawable for Screen {
-    fn set_parent(&mut self, item: Box<dyn Drawable>) {
-        panic!("Cannot set a parent for the Screen!");
-    }
-
-    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion {
+    fn draw_children(
+        children: &Vec<Box<dyn Drawable>>,
+        drawing_region: Region,
+        context: &DrawingContext,
+        frame: &mut Frame
+    ) -> TakenRegion {
         let mut available_region = drawing_region;
 
-        for child in &self.children {
+        for child in children {
             let taken_region = child.draw(available_region, context, frame);
 
             // Screen is only top-down by default
@@ -111,6 +77,48 @@ impl Drawable for Screen {
         }
 
         drawing_region
+    }
+}
+
+pub trait Drawable {
+    fn set_parent(&mut self, item: Box<dyn Drawable>);
+    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion;
+}
+
+#[derive(Default)]
+pub struct BaseOptions {
+    pub width: u32,
+    pub height: u32,
+    pub z_index: u8,
+    pub color: Option<String>,
+    pub overflow: bool,
+}
+
+pub struct Screen {
+    children: Vec<Box<dyn Drawable>>,
+}
+
+impl Screen {
+    pub fn new() -> Self {
+        Self {
+            children: vec![],
+        }
+    }
+}
+
+impl Container for Screen {
+    fn put(&mut self, item: Box<dyn Drawable>) {
+        self.children.push(item)
+    }
+}
+
+impl Drawable for Screen {
+    fn set_parent(&mut self, _item: Box<dyn Drawable>) {
+        panic!("Cannot set a parent for the Screen!");
+    }
+
+    fn draw(&self, drawing_region: Region, context: &DrawingContext, frame: &mut Frame) -> TakenRegion {
+        Screen::draw_children(&self.children, drawing_region, context, frame)
    }
 }
 
@@ -128,6 +136,12 @@ impl Rect {
             children: vec![],
             parent,
         }
+    }
+}
+
+impl Container for Rect {
+    fn put(&mut self, item: Box<dyn Drawable>) {
+        self.children.push(item);
     }
 }
 
@@ -175,6 +189,7 @@ impl Drawable for Rect {
             },
         };
 
+
         let shape = vec![top_right, bottom_right, bottom_left, top_left];
         let vertex_buffer = glium::VertexBuffer::new(&context.display, &shape).unwrap();
         let indicies: [u8; 6] = [0, 1, 3, 1, 2, 3];
@@ -218,7 +233,8 @@ impl Drawable for Rect {
             )
             .unwrap();
 
-        taken_space
+
+        Rect::draw_children(&self.children, taken_space, context, frame)
     }
 }
 
